@@ -22,6 +22,7 @@ app.post('/webscrape', async (req, res) => {
       return res.status(400).json({ 
         error: 'URL é obrigatória',
         usage: 'POST /webscrape com { "url": "https://exemplo.com" }'
+      }
       });
     }
 
