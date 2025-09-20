@@ -53,18 +53,29 @@ app.post('/webscrape', async (req, res) => {
       });
     }
 
+    // Limpar URL (remover chaves extras se houver)
+    let cleanUrl = url.toString().trim();
+    if (cleanUrl.startsWith('{') && cleanUrl.endsWith('}')) {
+      cleanUrl = cleanUrl.slice(1, -1);
+      console.log('Cleaned URL from:', url, 'to:', cleanUrl);
+    }
+
     // Validar URL
     let targetUrl;
     try {
-      targetUrl = new URL(url);
+      targetUrl = new URL(cleanUrl);
     } catch (err) {
-      return res.status(400).json({ error: 'URL inválida' });
+      return res.status(400).json({ 
+        error: 'URL inválida',
+        received_url: url,
+        cleaned_url: cleanUrl
+      });
     }
 
-    console.log(`Scraping: ${url}`);
+    console.log(`Scraping: ${cleanUrl}`);
 
     // Fazer requisição HTTP
-    const response = await axios.get(url, {
+    const response = await axios.get(cleanUrl, {
       headers: browserHeaders,
       timeout: 10000,
       maxRedirects: 5
