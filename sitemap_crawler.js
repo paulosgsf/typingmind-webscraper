@@ -15,7 +15,173 @@ const browserHeaders = {
   'Upgrade-Insecure-Requests': '1'
 };
 
-// Function to clean extracted text
+// ========================================
+// SEMANTIC CONTENT EXTRACTION FUNCTIONS
+// ========================================
+
+function extractSemanticContent($) {
+  // Priority cascade for semantic elements (try specific first)
+  const semanticSelectors = [
+    'main article',
+    'article', 
+    'main',
+    '[role="main"]',
+    '.post-content',
+    '.article-content', 
+    '.entry-content',
+    '.content-area',
+    '.docs-content',
+    '.documentation',
+    '.markdown-body'
+  ];
+  
+  // Try semantic selectors first
+  for (const selector of semanticSelectors) {
+    const $content = $(selector);
+    if ($content.length && $content.text().length > 200) {
+      console.log(`✅ Found content using semantic selector: ${selector}`);
+      return cleanAndStructureContent($content, $);
+    }
+  }
+  
+  // Fallback: Content scoring algorithm
+  console.log('🔍 Using content scoring algorithm...');
+  return contentScoringFallback($);
+}
+
+function contentScoringFallback($) {
+  let bestElement = null;
+  let bestScore = 0;
+  
+  // Score all potential content containers
+  $('div, section, article, main').each((i, elem) => {
+    const $elem = $(elem);
+    const score = calculateContentScore($elem, $);
+    
+    if (score > bestScore && score > 50) { // Minimum threshold
+      bestScore = score;
+      bestElement = $elem;
+    }
+  });
+  
+  if (bestElement) {
+    console.log(`✅ Best content found with score: ${bestScore}`);
+    return cleanAndStructureContent(bestElement, $);
+  }
+  
+  // Ultimate fallback: body with aggressive cleaning
+  console.log('⚠️ Using body fallback with aggressive cleaning');
+  return cleanAndStructureContent($('body'), $);
+}
+
+function calculateContentScore($elem, $) {
+  const text = $elem.text().trim();
+  const textLength = text.length;
+  
+  if (textLength < 50) return 0; // Too short
+  
+  // Calculate link density (lower is better for content)
+  const linkText = $elem.find('a').text().length;
+  const linkDensity = linkText / Math.max(textLength, 1);
+  
+  // Base score from text length
+  let score = Math.sqrt(textLength);
+  
+  // Penalties
+  score -= linkDensity * 200; // Heavy penalty for link spam
+  score -= $elem.find('script, style').length * 50; // Penalty for noise
+  score -= $elem.find('.ad, .advertisement, .social').length * 30;
+  
+  // Bonuses
+  score += $elem.find('p').length * 15; // Bonus for paragraphs
+  score += $elem.find('h1, h2, h3, h4, h5, h6').length * 10; // Bonus for headings
+  score += $elem.find('ul, ol').length * 5; // Bonus for lists
+  
+  // Class name bonuses (semantic indicators)
+  const className = $elem.attr('class') || '';
+  if (className.includes('content')) score += 30;
+  if (className.includes('main')) score += 25;
+  if (className.includes('article')) score += 25;
+  if (className.includes('post')) score += 20;
+  
+  // Class name penalties  
+  if (className.includes('sidebar')) score -= 50;
+  if (className.includes('nav')) score -= 40;
+  if (className.includes('footer')) score -= 40;
+  if (className.includes('header')) score -= 30;
+  
+  return Math.max(0, score);
+}
+
+function cleanAndStructureContent($content, $) {
+  // Clone to avoid modifying original
+  const $clean = $content.clone();
+  
+  // Remove noise elements aggressively
+  $clean.find('script, style, nav, header, footer, aside').remove();
+  $clean.find('.ad, .ads, .advertisement, .social-share').remove();
+  $clean.find('.breadcrumb, .pagination, .related-posts').remove();
+  $clean.find('[class*="sidebar"], [class*="widget"]').remove();
+  
+  // Clean up common noise patterns
+  $clean.find('div').each((i, elem) => {
+    const $div = $(elem);
+    const text = $div.text().trim();
+    
+    // Remove divs that are mostly links
+    const linkText = $div.find('a').text().length;
+    const linkDensity = linkText / Math.max(text.length, 1);
+    if (linkDensity > 0.7 && text.length < 200) {
+      $div.remove();
+    }
+    
+    // Remove very short divs that are likely UI elements
+    if (text.length < 30 && !$div.find('h1, h2, h3, h4, h5, h6').length) {
+      $div.remove();
+    }
+  });
+  
+  // Extract clean text with basic structure preservation
+  let cleanText = '';
+  
+  // Process headings with hierarchy
+  $clean.find('h1, h2, h3, h4, h5, h6').each((i, elem) => {
+    const level = parseInt(elem.tagName.slice(1));
+    const text = $(elem).text().trim();
+    if (text.length > 0) {
+      cleanText += '\n' + '#'.repeat(level) + ' ' + text + '\n\n';
+    }
+  });
+  
+  // Process paragraphs
+  $clean.find('p').each((i, elem) => {
+    const text = $(elem).text().trim();
+    if (text.length > 0) {
+      cleanText += text + '\n\n';
+    }
+  });
+  
+  // Process lists
+  $clean.find('ul, ol').each((i, elem) => {
+    const $list = $(elem);
+    $list.find('li').each((j, li) => {
+      const text = $(li).text().trim();
+      if (text.length > 0) {
+        cleanText += '• ' + text + '\n';
+      }
+    });
+    cleanText += '\n';
+  });
+  
+  // Fallback: if structured extraction didn't work, get all text
+  if (cleanText.trim().length < 100) {
+    cleanText = $clean.text();
+  }
+  
+  return cleanText.trim();
+}
+
+// Function to clean extracted text (legacy function, now enhanced)
 function cleanText(text) {
   return text
     .replace(/\s+/g, ' ')
@@ -23,7 +189,11 @@ function cleanText(text) {
     .trim();
 }
 
-// Function to scrape a single page (reusing logic from original server.js)
+// ========================================
+// MAIN SCRAPING FUNCTIONS (UPDATED)
+// ========================================
+
+// Function to scrape a single page with semantic extraction
 async function scrapeSinglePage(url) {
   try {
     console.log(`Scraping: ${url}`);
@@ -36,41 +206,13 @@ async function scrapeSinglePage(url) {
 
     const $ = cheerio.load(response.data);
 
-    // Remove unnecessary elements
+    // Remove unnecessary elements early
     $('script, style, nav, header, footer, .ad, .advertisement, #ads').remove();
 
-    // Extract main content
-    let content = '';
-    
-    const contentSelectors = [
-      'main',
-      'article', 
-      '[role="main"]',
-      '.content',
-      '.main-content',
-      '#content',
-      '.post-content',
-      '.entry-content',
-      '.docs-content',
-      '.documentation',
-      '.markdown-body',
-      'body'
-    ];
+    // Extract main content using semantic algorithm
+    const content = extractSemanticContent($);
 
-    for (const selector of contentSelectors) {
-      const element = $(selector);
-      if (element.length > 0 && element.text().trim().length > 100) {
-        content = element.text();
-        break;
-      }
-    }
-
-    // Fallback: get all text from body
-    if (!content) {
-      content = $('body').text();
-    }
-
-    // Clean and process text
+    // Clean and process text (apply final cleaning)
     const cleanedContent = cleanText(content);
     
     // Extract metadata
