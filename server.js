@@ -32,50 +32,27 @@ function cleanText(text) {
 // Endpoint principal de web scraping
 app.post('/webscrape', async (req, res) => {
   try {
-    // DEBUG: Log completo do request
-    console.log('=== DEBUG REQUEST ===');
-    console.log('Headers:', req.headers);
-    console.log('Body:', req.body);
-    console.log('Raw body type:', typeof req.body);
-    console.log('===================');
-    
     const { url } = req.body;
-    
-    // DEBUG: Log específico da URL
-    console.log('Extracted URL:', url);
-    console.log('URL type:', typeof url);
     
     if (!url) {
       return res.status(400).json({ 
         error: 'URL é obrigatória',
-        received_body: req.body,
         usage: 'POST /webscrape com { "url": "https://exemplo.com" }'
       });
-    }
-
-    // Limpar URL (remover chaves extras se houver)
-    let cleanUrl = url.toString().trim();
-    if (cleanUrl.startsWith('{') && cleanUrl.endsWith('}')) {
-      cleanUrl = cleanUrl.slice(1, -1);
-      console.log('Cleaned URL from:', url, 'to:', cleanUrl);
     }
 
     // Validar URL
     let targetUrl;
     try {
-      targetUrl = new URL(cleanUrl);
+      targetUrl = new URL(url);
     } catch (err) {
-      return res.status(400).json({ 
-        error: 'URL inválida',
-        received_url: url,
-        cleaned_url: cleanUrl
-      });
+      return res.status(400).json({ error: 'URL inválida' });
     }
 
-    console.log(`Scraping: ${cleanUrl}`);
+    console.log(`Scraping: ${url}`);
 
     // Fazer requisição HTTP
-    const response = await axios.get(cleanUrl, {
+    const response = await axios.get(url, {
       headers: browserHeaders,
       timeout: 10000,
       maxRedirects: 5
@@ -162,6 +139,48 @@ app.get('/health', (req, res) => {
     version: '1.0.0',
     timestamp: new Date().toISOString()
   });
+});
+// === NOVO ENDPOINT INTELIGENTE ===
+const { intelligentCrawl } = require('./sitemap_crawler');
+
+// Endpoint para crawling inteligente de documentação
+app.post('/webscrape-intelligent', async (req, res) => {
+  try {
+    const { base_url, max_pages = 15, type = 'documentation' } = req.body;
+    
+    console.log('=== INTELLIGENT CRAWL REQUEST ===');
+    console.log('Body:', req.body);
+    
+    if (!base_url) {
+      return res.status(400).json({ 
+        error: 'base_url é obrigatória',
+        usage: 'POST /webscrape-intelligent com { "base_url": "https://docs.exemplo.com" }'
+      });
+    }
+
+    console.log(`Starting intelligent crawl: ${base_url}`);
+    
+    const result = await intelligentCrawl(base_url, { 
+      maxPages: max_pages, 
+      type: type 
+    });
+    
+    res.json({
+      site_url: base_url,
+      type: type,
+      summary: result.summary,
+      pages: result.pages,
+      consolidated_content: result.consolidatedContent,
+      scraped_at: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Intelligent crawl error:', error);
+    res.status(500).json({ 
+      error: 'Crawling inteligente falhou', 
+      details: error.message 
+    });
+  }
 });
 
 // Iniciar servidor
