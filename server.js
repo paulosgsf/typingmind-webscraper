@@ -32,7 +32,14 @@ function cleanText(text) {
 // Endpoint principal de web scraping
 app.post('/webscrape', async (req, res) => {
   try {
-    const { url } = req.body;
+    console.log('=== RAW REQUEST DEBUG ===');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Raw body:', req.body);
+    console.log('Body type:', typeof req.body);
+    console.log('Body stringified:', JSON.stringify(req.body));
+    console.log('========================');
+    
+    const { base_url, max_pages = 15, type = 'documentation' } = req.body;
     
     if (!url) {
       return res.status(400).json({ 
