@@ -153,8 +153,21 @@ const { intelligentCrawl } = require('./sitemap_crawler');
 // Endpoint para crawling inteligente de documentação
 app.post('/webscrape-intelligent', async (req, res) => {
   try {
-    const { base_url, max_pages = 15, type = 'documentation' } = req.body;
-    
+let { base_url, url, max_pages = 15, type = 'documentation' } = req.body;
+
+// Fix parameter name (plugin sends 'url' instead of 'base_url')
+if (!base_url && url) {
+  base_url = url;
+}
+
+// Clean URL (remove extra braces like the simple endpoint does)
+if (base_url) {
+  base_url = base_url.toString().trim();
+  if (base_url.startsWith('{') && base_url.endsWith('}')) {
+    base_url = base_url.slice(1, -1);
+    console.log('Cleaned base_url from:', url || req.body.base_url, 'to:', base_url);
+  }
+}    
     console.log('=== INTELLIGENT CRAWL REQUEST ===');
     console.log('Body:', req.body);
     
