@@ -59,21 +59,34 @@ app.post('/webscrape', async (req, res) => {
       return res.status(400).json({ error: 'URL inválida' });
     }
 
-    console.log(`Scraping: ${url}`);
+    console.log(`=== ENHANCED SCRAPING REQUEST ===`);
+    console.log(`URL: ${url}`);
 
     // Use the enhanced scraping function from sitemap_crawler
     const result = await scrapeSinglePage(url);
     
     if (result.success) {
-      console.log(`✅ Scraped ${url} - ${result.length} chars`);
+      console.log(`✅ Enhanced scraping completed: ${result.length} chars`);
+      console.log(`✅ Metadata fields: ${Object.keys(result).length} total fields`);
+      
+      // Log metadata summary for debugging
+      console.log('📊 Metadata Summary:');
+      console.log(`  - Title: ${result.title ? 'YES' : 'NO'}`);
+      console.log(`  - Author: ${result.author ? 'YES' : 'NO'}`);
+      console.log(`  - Keywords: ${result.keywords?.length || 0} found`);
+      console.log(`  - Content Type: ${result.contentType}`);
+      console.log(`  - Language: ${result.language}`);
+      console.log(`  - Word Count: ${result.wordCount}`);
+      console.log(`  - Reading Time: ${result.readingTime}`);
+      
       res.json(result);
     } else {
-      console.log(`❌ Failed to scrape ${url} - ${result.error}`);
+      console.log(`❌ Enhanced scraping failed: ${result.error}`);
       res.status(500).json(result);
     }
 
   } catch (error) {
-    console.error('❌ Scraping error:', error.message);
+    console.error('❌ Enhanced scraping error:', error.message);
     
     if (error.code === 'ENOTFOUND') {
       return res.status(400).json({ error: 'URL não encontrada ou inacessível' });
@@ -160,9 +173,15 @@ app.post('/webscrape-intelligent', async (req, res) => {
 
 // Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`🚀 Web Scraper Server v2.0 running on port ${PORT}`);
+  console.log(`🚀 Web Scraper Server v2.0 Enhanced running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔧 Simple scrape: POST http://localhost:${PORT}/webscrape`);
+  console.log(`🔧 Enhanced scrape: POST http://localhost:${PORT}/webscrape`);
   console.log(`🧠 Intelligent crawl: POST http://localhost:${PORT}/webscrape-intelligent`);
-  console.log(`✨ Features: Semantic extraction, Advanced metadata, Intelligent crawling`);
+  console.log(`✨ NEW Features:`);
+  console.log(`   - Semantic content extraction`);
+  console.log(`   - 11 metadata fields (vs 3 before)`);
+  console.log(`   - Content scoring algorithm`);
+  console.log(`   - Intelligent sitemap crawling`);
+  console.log(`📊 Metadata fields: title, description, author, keywords, publishDate,`);
+  console.log(`    language, wordCount, readingTime, contentType, openGraph, lastModified, canonicalUrl`);
 });
