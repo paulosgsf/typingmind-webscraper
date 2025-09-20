@@ -32,14 +32,20 @@ function cleanText(text) {
 // Endpoint principal de web scraping
 app.post('/webscrape', async (req, res) => {
   try {
-    
-    const { base_url, max_pages = 15, type = 'documentation' } = req.body;
+    let { url } = req.body;
     
     if (!url) {
       return res.status(400).json({ 
         error: 'URL é obrigatória',
         usage: 'POST /webscrape com { "url": "https://exemplo.com" }'
       });
+    }
+
+    // Limpar URL (remover chaves extras se houver)
+    url = url.toString().trim();
+    if (url.startsWith('{') && url.endsWith('}')) {
+      url = url.slice(1, -1);
+      console.log('Cleaned URL from:', req.body.url, 'to:', url);
     }
 
     // Validar URL
