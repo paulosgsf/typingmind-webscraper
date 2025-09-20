@@ -720,7 +720,7 @@ function cleanText(text) {
 // MAIN SCRAPING FUNCTIONS (ENHANCED)
 // ========================================
 
-// Enhanced function to scrape a single page with TOKEN OPTIMIZATION
+// Enhanced function to scrape a single page with SELECTIVE TOKEN OPTIMIZATION
 async function scrapeSinglePage(url) {
   try {
     console.log(`Scraping: ${url}`);
@@ -736,19 +736,20 @@ async function scrapeSinglePage(url) {
     // Remove unnecessary elements early
     $('script, style, nav, header, footer, .ad, .advertisement, #ads').remove();
 
-    // Extract main content using ENHANCED semantic algorithm
-    const rawContent = extractEnhancedSemanticContent($);
+    // Extract main content using ORIGINAL semantic algorithm (that worked)
+    const rawContent = extractSemanticContent($);
     const cleanedContent = cleanText(rawContent);
     
     // Extract advanced metadata (11 fields)
     const metadata = extractAdvancedMetadata($, cleanedContent, url);
 
-    // ENTREGA 3: Optimize content for LLM consumption (40% token reduction)
-    const optimizedResult = optimizeForLLM(cleanedContent, metadata);
+    // SELECTIVE optimization: Only apply safe improvements
+    const optimizedContent = applySafeOptimizations(cleanedContent);
+    const reductionPercentage = Math.round((1 - optimizedContent.length / cleanedContent.length) * 100);
 
-    console.log(`✅ Successfully scraped ${url} - ${optimizedResult.content.length} chars (optimized)`);
-    if (optimizedResult.optimization_stats) {
-      console.log(`🎯 Token reduction: ${optimizedResult.optimization_stats.reduction_percentage}%`);
+    console.log(`✅ Successfully scraped ${url} - ${optimizedContent.length} chars`);
+    if (reductionPercentage > 0) {
+      console.log(`🎯 Content optimized: ${reductionPercentage}% reduction`);
     }
 
     return {
@@ -768,10 +769,15 @@ async function scrapeSinglePage(url) {
       lastModified: metadata.lastModified,
       canonicalUrl: metadata.canonicalUrl,
       
-      // ENTREGA 3: Optimized content and stats
-      content: optimizedResult.content,
-      length: optimizedResult.content.length,
-      optimization_stats: optimizedResult.optimization_stats,
+      // Optimized content (safe optimizations only)
+      content: optimizedContent,
+      length: optimizedContent.length,
+      optimization_stats: reductionPercentage > 0 ? {
+        original_length: cleanedContent.length,
+        optimized_length: optimizedContent.length,
+        reduction_percentage: reductionPercentage,
+        techniques_applied: ['safe_cleanup', 'whitespace_optimization', 'redundancy_removal']
+      } : null,
       
       // Technical fields
       success: true,
@@ -791,6 +797,44 @@ async function scrapeSinglePage(url) {
       success: false, error: error.message, scraped_at: new Date().toISOString()
     };
   }
+}
+
+// Safe optimization function that only applies proven improvements
+function applySafeOptimizations(content) {
+  if (!content || content.length < 50) return content;
+  
+  let optimized = content;
+  
+  // Safe optimizations that don't lose content
+  
+  // 1. Clean up excessive whitespace
+  optimized = optimized.replace(/\n\s*\n\s*\n/g, '\n\n'); // Max 2 line breaks
+  optimized = optimized.replace(/[ \t]+/g, ' '); // Normalize spaces but preserve newlines
+  optimized = optimized.replace(/\n /g, '\n'); // Remove leading spaces on lines
+  
+  // 2. Remove obvious redundant phrases (conservative)
+  optimized = optimized.replace(/\b(War diese Seite hilfreich\?|Was this page helpful\?)\s*$/gim, '');
+  optimized = optimized.replace(/\b(Home|Navigation|Search|Suchen)[\s\w]*\n/gim, '');
+  
+  // 3. Compress only safe verbose phrases
+  const safeCompressions = {
+    'in order to': 'to',
+    'due to the fact that': 'because',
+    'artificial intelligence': 'AI',
+    'large language model': 'LLM',
+    'application programming interface': 'API'
+  };
+  
+  Object.entries(safeCompressions).forEach(([verbose, concise]) => {
+    const regex = new RegExp(`\\b${verbose}\\b`, 'gi');
+    optimized = optimized.replace(regex, concise);
+  });
+  
+  // 4. Final cleanup
+  optimized = optimized.replace(/\s+$/gm, ''); // Remove trailing spaces
+  optimized = optimized.trim();
+  
+  return optimized;
 }
 
 // Rate-limited batch scraping
