@@ -16,288 +16,6 @@ const browserHeaders = {
 };
 
 // ========================================
-// ADVANCED METADATA EXTRACTION FUNCTIONS
-// ========================================
-
-function extractAdvancedMetadata($, content, url) {
-  const metadata = {
-    // Basic fields (existing)
-    title: extractTitle($),
-    description: extractDescription($),
-    
-    // New advanced fields
-    author: extractAuthor($),
-    keywords: extractKeywords($, content),
-    publishDate: extractPublishDate($),
-    language: extractLanguage($, content),
-    wordCount: calculateWordCount(content),
-    readingTime: estimateReadingTime(content),
-    contentType: classifyContentType($, url),
-    openGraph: extractOpenGraph($),
-    
-    // Technical metadata
-    lastModified: extractLastModified($),
-    canonicalUrl: extractCanonicalUrl($)
-  };
-  
-  return metadata;
-}
-
-function extractTitle($) {
-  // Try multiple title sources in order of preference
-  const titleSources = [
-    $('meta[property="og:title"]').attr('content'),
-    $('meta[name="twitter:title"]').attr('content'),
-    $('h1').first().text().trim(),
-    $('title').text().trim()
-  ];
-  
-  for (const title of titleSources) {
-    if (title && title.length > 0 && title.length < 200) {
-      return title;
-    }
-  }
-  
-  return '';
-}
-
-function extractDescription($) {
-  // Try multiple description sources
-  const descriptionSources = [
-    $('meta[name="description"]').attr('content'),
-    $('meta[property="og:description"]').attr('content'),
-    $('meta[name="twitter:description"]').attr('content'),
-    $('.excerpt, .summary, .intro').first().text().trim()
-  ];
-  
-  for (const desc of descriptionSources) {
-    if (desc && desc.length > 20 && desc.length < 500) {
-      return desc;
-    }
-  }
-  
-  return '';
-}
-
-function extractAuthor($) {
-  // Try multiple author detection patterns
-  const authorSelectors = [
-    'meta[name="author"]',
-    'meta[property="article:author"]', 
-    '.author',
-    '.byline',
-    '[rel="author"]',
-    '.post-author',
-    '[itemProp="author"]',
-    '.author-name',
-    '.writer'
-  ];
-  
-  for (const selector of authorSelectors) {
-    const element = $(selector);
-    if (element.length > 0) {
-      const author = element.attr('content') || element.text().trim();
-      if (author && author.length > 0 && author.length < 100) {
-        // Clean up common prefixes
-        return author.replace(/^(by\s+|author:\s*)/i, '').trim();
-      }
-    }
-  }
-  
-  return null;
-}
-
-function extractKeywords($, content) {
-  // Extract from meta keywords
-  const metaKeywords = $('meta[name="keywords"]').attr('content');
-  if (metaKeywords) {
-    return metaKeywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
-  }
-  
-  // Extract from tags/categories
-  const tags = [];
-  $('.tag, .category, .label, [rel="tag"]').each((i, elem) => {
-    const tag = $(elem).text().trim();
-    if (tag && tag.length > 0 && tag.length < 50) {
-      tags.push(tag);
-    }
-  });
-  
-  if (tags.length > 0) {
-    return tags.slice(0, 10); // Limit to 10 tags
-  }
-  
-  // Fallback: extract common technical terms from content
-  return extractKeywordsFromContent(content);
-}
-
-function extractKeywordsFromContent(content) {
-  if (!content || content.length < 100) return [];
-  
-  // Common technical/documentation keywords to look for
-  const technicalTerms = [
-    'API', 'authentication', 'configuration', 'installation', 'setup',
-    'tutorial', 'guide', 'documentation', 'getting started', 'quickstart',
-    'parameters', 'endpoints', 'methods', 'functions', 'classes',
-    'variables', 'constants', 'properties', 'attributes'
-  ];
-  
-  const foundTerms = [];
-  const lowerContent = content.toLowerCase();
-  
-  technicalTerms.forEach(term => {
-    if (lowerContent.includes(term.toLowerCase())) {
-      foundTerms.push(term);
-    }
-  });
-  
-  return foundTerms.slice(0, 5); // Limit to 5 auto-detected terms
-}
-
-function extractPublishDate($) {
-  // Try multiple date formats and sources
-  const dateSources = [
-    $('meta[property="article:published_time"]').attr('content'),
-    $('meta[property="article:modified_time"]').attr('content'),
-    $('meta[name="publish_date"]').attr('content'),
-    $('time[datetime]').attr('datetime'),
-    $('time[pubdate]').attr('datetime'),
-    $('.date, .publish-date, .post-date').first().text().trim()
-  ];
-  
-  for (const dateStr of dateSources) {
-    if (dateStr) {
-      const parsedDate = new Date(dateStr);
-      if (!isNaN(parsedDate.getTime())) {
-        return parsedDate.toISOString();
-      }
-    }
-  }
-  
-  return null;
-}
-
-function extractLanguage($, content) {
-  // Try HTML lang attribute first
-  const htmlLang = $('html').attr('lang');
-  if (htmlLang) {
-    return htmlLang.split('-')[0]; // Get just the language part (en from en-US)
-  }
-  
-  // Try meta content-language
-  const metaLang = $('meta[http-equiv="content-language"]').attr('content');
-  if (metaLang) {
-    return metaLang.split('-')[0];
-  }
-  
-  // Simple language detection based on content
-  return detectLanguageFromContent(content);
-}
-
-function detectLanguageFromContent(content) {
-  if (!content || content.length < 50) return 'unknown';
-  
-  // Very basic language detection (English vs others)
-  const englishIndicators = ['the', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of', 'with'];
-  const words = content.toLowerCase().split(/\s+/).slice(0, 100); // First 100 words
-  
-  let englishScore = 0;
-  englishIndicators.forEach(indicator => {
-    englishScore += words.filter(word => word === indicator).length;
-  });
-  
-  return englishScore > 5 ? 'en' : 'unknown';
-}
-
-function calculateWordCount(content) {
-  if (!content) return 0;
-  return content.trim().split(/\s+/).filter(word => word.length > 0).length;
-}
-
-function estimateReadingTime(content) {
-  const wordCount = calculateWordCount(content);
-  const wordsPerMinute = 200; // Average reading speed
-  const minutes = Math.ceil(wordCount / wordsPerMinute);
-  return `${minutes} min read`;
-}
-
-function classifyContentType($, url) {
-  // Classify based on URL patterns and content structure
-  const urlLower = url.toLowerCase();
-  
-  if (urlLower.includes('/docs/') || urlLower.includes('/documentation/')) {
-    return 'documentation';
-  }
-  
-  if (urlLower.includes('/api/') || urlLower.includes('/reference/')) {
-    return 'api-reference';
-  }
-  
-  if (urlLower.includes('/tutorial/') || urlLower.includes('/guide/')) {
-    return 'tutorial';
-  }
-  
-  if (urlLower.includes('/blog/') || urlLower.includes('/news/')) {
-    return 'blog';
-  }
-  
-  // Classify based on content structure
-  const hasCodeBlocks = $('pre, code').length > 3;
-  const hasAPIMethods = $('h2, h3').text().toLowerCase().includes('method');
-  
-  if (hasAPIMethods) return 'api-reference';
-  if (hasCodeBlocks) return 'technical-guide';
-  
-  return 'general';
-}
-
-function extractOpenGraph($) {
-  const og = {};
-  
-  // Extract common Open Graph tags
-  const ogTags = {
-    'og:title': 'title',
-    'og:description': 'description', 
-    'og:type': 'type',
-    'og:url': 'url',
-    'og:image': 'image',
-    'og:site_name': 'siteName'
-  };
-  
-  Object.entries(ogTags).forEach(([property, key]) => {
-    const content = $(`meta[property="${property}"]`).attr('content');
-    if (content) {
-      og[key] = content;
-    }
-  });
-  
-  return Object.keys(og).length > 0 ? og : null;
-}
-
-function extractLastModified($) {
-  const modifiedSources = [
-    $('meta[property="article:modified_time"]').attr('content'),
-    $('meta[name="last-modified"]').attr('content'),
-    $('.last-modified, .updated').first().text().trim()
-  ];
-  
-  for (const dateStr of modifiedSources) {
-    if (dateStr) {
-      const parsedDate = new Date(dateStr);
-      if (!isNaN(parsedDate.getTime())) {
-        return parsedDate.toISOString();
-      }
-    }
-  }
-  
-  return null;
-}
-
-function extractCanonicalUrl($) {
-  return $('link[rel="canonical"]').attr('href') || null;
-}
-
-// ========================================
 // SEMANTIC CONTENT EXTRACTION FUNCTIONS
 // ========================================
 
@@ -463,6 +181,272 @@ function cleanAndStructureContent($content, $) {
   return cleanText.trim();
 }
 
+// ========================================
+// ADVANCED METADATA EXTRACTION FUNCTIONS
+// ========================================
+
+function extractAdvancedMetadata($, content, url) {
+  try {
+    return {
+      title: extractTitle($),
+      description: extractDescription($),
+      author: extractAuthor($),
+      keywords: extractKeywords($, content),
+      publishDate: extractPublishDate($),
+      language: extractLanguage($, content),
+      wordCount: calculateWordCount(content),
+      readingTime: estimateReadingTime(content),
+      contentType: classifyContentType($, url),
+      openGraph: extractOpenGraph($),
+      lastModified: extractLastModified($),
+      canonicalUrl: extractCanonicalUrl($)
+    };
+  } catch (error) {
+    console.error('Error in extractAdvancedMetadata:', error.message);
+    throw error;
+  }
+}
+
+function extractTitle($) {
+  try {
+    const titleSources = [
+      $('meta[property="og:title"]').attr('content'),
+      $('meta[name="twitter:title"]').attr('content'),
+      $('h1').first().text().trim(),
+      $('title').text().trim()
+    ];
+    
+    for (const title of titleSources) {
+      if (title && title.length > 0 && title.length < 200) {
+        return title;
+      }
+    }
+    return '';
+  } catch (error) {
+    return $('title').text().trim() || '';
+  }
+}
+
+function extractDescription($) {
+  try {
+    const descriptionSources = [
+      $('meta[name="description"]').attr('content'),
+      $('meta[property="og:description"]').attr('content'),
+      $('meta[name="twitter:description"]').attr('content')
+    ];
+    
+    for (const desc of descriptionSources) {
+      if (desc && desc.length > 20 && desc.length < 500) {
+        return desc;
+      }
+    }
+    return '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function extractAuthor($) {
+  try {
+    const authorSelectors = [
+      'meta[name="author"]',
+      'meta[property="article:author"]', 
+      '.author',
+      '.byline',
+      '[rel="author"]',
+      '.post-author',
+      '[itemProp="author"]'
+    ];
+    
+    for (const selector of authorSelectors) {
+      const element = $(selector);
+      if (element.length > 0) {
+        const author = element.attr('content') || element.text().trim();
+        if (author && author.length > 0 && author.length < 100) {
+          return author.replace(/^(by\s+|author:\s*)/i, '').trim();
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function extractKeywords($, content) {
+  try {
+    // Try meta keywords first
+    const metaKeywords = $('meta[name="keywords"]').attr('content');
+    if (metaKeywords) {
+      return metaKeywords.split(',').map(k => k.trim()).filter(k => k.length > 0).slice(0, 10);
+    }
+    
+    // Extract from content
+    if (!content || content.length < 100) return [];
+    
+    const technicalTerms = [
+      'API', 'authentication', 'configuration', 'installation', 'setup',
+      'tutorial', 'guide', 'documentation', 'getting started', 'quickstart',
+      'parameters', 'endpoints', 'methods', 'functions', 'classes'
+    ];
+    
+    const foundTerms = [];
+    const lowerContent = content.toLowerCase();
+    
+    technicalTerms.forEach(term => {
+      if (lowerContent.includes(term.toLowerCase())) {
+        foundTerms.push(term);
+      }
+    });
+    
+    return foundTerms.slice(0, 5);
+  } catch (error) {
+    return [];
+  }
+}
+
+function extractPublishDate($) {
+  try {
+    const dateSources = [
+      $('meta[property="article:published_time"]').attr('content'),
+      $('meta[property="article:modified_time"]').attr('content'),
+      $('time[datetime]').attr('datetime')
+    ];
+    
+    for (const dateStr of dateSources) {
+      if (dateStr) {
+        const parsedDate = new Date(dateStr);
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate.toISOString();
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function extractLanguage($, content) {
+  try {
+    const htmlLang = $('html').attr('lang');
+    if (htmlLang) {
+      return htmlLang.split('-')[0];
+    }
+    
+    // Simple detection
+    if (!content || content.length < 50) return 'unknown';
+    
+    const englishIndicators = ['the', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of', 'with'];
+    const words = content.toLowerCase().split(/\s+/).slice(0, 100);
+    
+    let englishScore = 0;
+    englishIndicators.forEach(indicator => {
+      englishScore += words.filter(word => word === indicator).length;
+    });
+    
+    return englishScore > 5 ? 'en' : 'unknown';
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
+function calculateWordCount(content) {
+  try {
+    if (!content) return 0;
+    return content.trim().split(/\s+/).filter(word => word.length > 0).length;
+  } catch (error) {
+    return 0;
+  }
+}
+
+function estimateReadingTime(content) {
+  try {
+    const wordCount = calculateWordCount(content);
+    const wordsPerMinute = 200;
+    const minutes = Math.ceil(wordCount / wordsPerMinute);
+    return `${minutes} min read`;
+  } catch (error) {
+    return '0 min read';
+  }
+}
+
+function classifyContentType($, url) {
+  try {
+    const urlLower = url.toLowerCase();
+    
+    if (urlLower.includes('/docs/') || urlLower.includes('/documentation/')) {
+      return 'documentation';
+    }
+    if (urlLower.includes('/api/') || urlLower.includes('/reference/')) {
+      return 'api-reference';
+    }
+    if (urlLower.includes('/tutorial/') || urlLower.includes('/guide/')) {
+      return 'tutorial';
+    }
+    if (urlLower.includes('/blog/') || urlLower.includes('/news/')) {
+      return 'blog';
+    }
+    
+    return 'general';
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
+function extractOpenGraph($) {
+  try {
+    const og = {};
+    const ogTags = {
+      'og:title': 'title',
+      'og:description': 'description', 
+      'og:type': 'type',
+      'og:url': 'url',
+      'og:image': 'image'
+    };
+    
+    Object.entries(ogTags).forEach(([property, key]) => {
+      const content = $(`meta[property="${property}"]`).attr('content');
+      if (content) {
+        og[key] = content;
+      }
+    });
+    
+    return Object.keys(og).length > 0 ? og : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function extractLastModified($) {
+  try {
+    const modifiedSources = [
+      $('meta[property="article:modified_time"]').attr('content'),
+      $('meta[name="last-modified"]').attr('content')
+    ];
+    
+    for (const dateStr of modifiedSources) {
+      if (dateStr) {
+        const parsedDate = new Date(dateStr);
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate.toISOString();
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function extractCanonicalUrl($) {
+  try {
+    return $('link[rel="canonical"]').attr('href') || null;
+  } catch (error) {
+    return null;
+  }
+}
+
 // Function to clean extracted text (legacy function, now enhanced)
 function cleanText(text) {
   return text
@@ -475,16 +459,47 @@ function cleanText(text) {
 // MAIN SCRAPING FUNCTIONS (UPDATED)
 // ========================================
 
-// Function to scrape a single page with semantic extraction
+// Function to scrape a single page with enhanced error handling
 async function scrapeSinglePage(url) {
   try {
     console.log(`Scraping: ${url}`);
     
-    const response = await axios.get(url, {
-      headers: browserHeaders,
-      timeout: 8000,
-      maxRedirects: 3
-    });
+    // Try multiple strategies for difficult URLs
+    let response;
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const requestConfig = {
+          headers: {
+            ...browserHeaders,
+            'Referer': new URL(url).origin,
+            'Cache-Control': 'no-cache'
+          },
+          timeout: 15000,
+          maxRedirects: attempts === 0 ? 5 : (attempts === 1 ? 10 : 0),
+          validateStatus: function (status) {
+            return status >= 200 && status < 400;
+          },
+          followRedirect: true
+        };
+        
+        console.log(`Attempt ${attempts + 1} for ${url} (max redirects: ${requestConfig.maxRedirects})`);
+        response = await axios.get(url, requestConfig);
+        break;
+        
+      } catch (redirectError) {
+        attempts++;
+        console.log(`Attempt ${attempts} failed: ${redirectError.message}`);
+        
+        if (attempts === maxAttempts) {
+          throw redirectError;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+      }
+    }
 
     const $ = cheerio.load(response.data);
 
@@ -494,11 +509,35 @@ async function scrapeSinglePage(url) {
     // Extract main content using semantic algorithm
     const content = extractSemanticContent($);
 
-    // Clean and process text (apply final cleaning)
+    // Clean and process text
     const cleanedContent = cleanText(content);
     
+    console.log('🔍 DEBUG: About to extract metadata...');
+    
     // Extract advanced metadata (11 fields)
-    const metadata = extractAdvancedMetadata($, cleanedContent, url);
+    let metadata;
+    try {
+      metadata = extractAdvancedMetadata($, cleanedContent, url);
+      console.log('✅ DEBUG: Metadata extracted successfully:', Object.keys(metadata));
+    } catch (metadataError) {
+      console.error('❌ DEBUG: Metadata extraction failed:', metadataError.message);
+      metadata = {
+        title: $('title').text().trim() || '',
+        description: $('meta[name="description"]').attr('content') || '',
+        author: null,
+        keywords: [],
+        publishDate: null,
+        language: 'unknown',
+        wordCount: calculateWordCount(cleanedContent),
+        readingTime: estimateReadingTime(cleanedContent),
+        contentType: 'unknown',
+        openGraph: null,
+        lastModified: null,
+        canonicalUrl: null
+      };
+    }
+
+    console.log(`✅ Successfully scraped ${url} - ${cleanedContent.length} chars`);
 
     return {
       url: url,
@@ -525,11 +564,18 @@ async function scrapeSinglePage(url) {
     };
 
   } catch (error) {
-    console.error(`Failed to scrape ${url}:`, error.message);
+    console.error(`❌ Failed to scrape ${url}:`, error.message);
+    
+    let errorDetails = error.message;
+    if (error.response) {
+      errorDetails += ` (HTTP ${error.response.status})`;
+    }
+    if (error.code) {
+      errorDetails += ` (${error.code})`;
+    }
+    
     return {
       url: url,
-      
-      // Empty metadata fields for failed scraping
       title: '',
       description: '',
       author: null,
@@ -542,12 +588,10 @@ async function scrapeSinglePage(url) {
       openGraph: null,
       lastModified: null,
       canonicalUrl: null,
-      
-      // Content and technical fields
       content: '',
       length: 0,
       success: false,
-      error: error.message,
+      error: errorDetails,
       scraped_at: new Date().toISOString()
     };
   }
@@ -566,7 +610,6 @@ async function batchScrape(urls, delayMs = 1000) {
     
     console.log(`Scraped ${i + 1}/${urls.length}: ${pageData.success ? 'SUCCESS' : 'FAILED'} - ${url}`);
     
-    // Rate limiting: wait between requests (except for last one)
     if (i < urls.length - 1) {
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
@@ -598,7 +641,6 @@ async function intelligentCrawl(baseUrl, options = {}) {
     
     if (discoveredUrls.length === 0) {
       console.log('No sitemap found, using fallback method');
-      // Fallback: just scrape the base URL
       discoveredUrls = [baseUrl];
     } else {
       console.log(`Found ${discoveredUrls.length} URLs in sitemap`);
@@ -611,7 +653,7 @@ async function intelligentCrawl(baseUrl, options = {}) {
     
     // Step 3: Filter by content type
     console.log('\n=== STEP 3: FILTERING BY TYPE ===');
-    const filteredUrls = filterUrlsByType(cleanedUrls, type, maxPages * 2); // Get more candidates for prioritization
+    const filteredUrls = filterUrlsByType(cleanedUrls, type, maxPages * 2);
     
     if (filteredUrls.length === 0) {
       console.log('No URLs match the specified type, falling back to base URL');
@@ -635,7 +677,6 @@ async function intelligentCrawl(baseUrl, options = {}) {
         let pageSection = `=== ${page.title || 'Untitled'} ===\n`;
         pageSection += `URL: ${page.url}\n`;
         
-        // Add rich metadata
         if (page.author) pageSection += `Author: ${page.author}\n`;
         if (page.contentType) pageSection += `Type: ${page.contentType}\n`;
         if (page.readingTime) pageSection += `Reading Time: ${page.readingTime}\n`;
