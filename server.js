@@ -21,7 +21,10 @@ const browserHeaders = {
   'Upgrade-Insecure-Requests': '1'
 };
 
-// Função para limpar texto extraído
+// Import the semantic extraction functions from sitemap_crawler
+const { scrapeSinglePage } = require('./sitemap_crawler');
+
+// Função para limpar texto extraído (legacy support)
 function cleanText(text) {
   return text
     .replace(/\s+/g, ' ')
@@ -29,7 +32,7 @@ function cleanText(text) {
     .trim();
 }
 
-// Endpoint principal de web scraping
+// Endpoint principal de web scraping (enhanced with metadata)
 app.post('/webscrape', async (req, res) => {
   try {
     let { url } = req.body;
@@ -58,67 +61,16 @@ app.post('/webscrape', async (req, res) => {
 
     console.log(`Scraping: ${url}`);
 
-    // Fazer requisição HTTP
-    const response = await axios.get(url, {
-      headers: browserHeaders,
-      timeout: 10000,
-      maxRedirects: 5
-    });
-
-    // Carregar HTML no Cheerio
-    const $ = cheerio.load(response.data);
-
-    // Remover elementos desnecessários
-    $('script, style, nav, header, footer, .ad, .advertisement, #ads').remove();
-
-    // Extrair conteúdo principal
-    let content = '';
+    // Use the enhanced scraping function from sitemap_crawler
+    const result = await scrapeSinglePage(url);
     
-    // Tentar diferentes seletores comuns para conteúdo principal
-    const contentSelectors = [
-      'main',
-      'article', 
-      '[role="main"]',
-      '.content',
-      '.main-content',
-      '#content',
-      '.post-content',
-      '.entry-content',
-      'body'
-    ];
-
-    for (const selector of contentSelectors) {
-      const element = $(selector);
-      if (element.length > 0 && element.text().trim().length > 100) {
-        content = element.text();
-        break;
-      }
+    if (result.success) {
+      console.log(`✅ Scraped ${url} - ${result.length} chars`);
+      res.json(result);
+    } else {
+      console.log(`❌ Failed to scrape ${url} - ${result.error}`);
+      res.status(500).json(result);
     }
-
-    // Fallback: pegar todo o texto do body se nenhum seletor funcionou
-    if (!content) {
-      content = $('body').text();
-    }
-
-    // Limpar e processar texto
-    const cleanedContent = cleanText(content);
-    
-    // Extrair metadados úteis
-    const title = $('title').text().trim() || '';
-    const description = $('meta[name="description"]').attr('content') || '';
-
-    // Resposta estruturada
-    const result = {
-      url: url,
-      title: title,
-      description: description,
-      content: cleanedContent,
-      length: cleanedContent.length,
-      scraped_at: new Date().toISOString()
-    };
-
-    console.log(`✅ Scraped ${url} - ${result.length} chars`);
-    res.json(result);
 
   } catch (error) {
     console.error('❌ Scraping error:', error.message);
@@ -143,31 +95,34 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     service: 'TypingMind Web Scraper',
-    version: '1.0.0',
+    version: '2.0.0', // Updated version
+    features: ['semantic_extraction', 'advanced_metadata', 'intelligent_crawling'],
     timestamp: new Date().toISOString()
   });
 });
-// === NOVO ENDPOINT INTELIGENTE ===
+
+// === INTELLIGENT CRAWLING ENDPOINT ===
 const { intelligentCrawl } = require('./sitemap_crawler');
 
 // Endpoint para crawling inteligente de documentação
 app.post('/webscrape-intelligent', async (req, res) => {
   try {
-let { base_url, url, max_pages = 15, type = 'documentation' } = req.body;
+    let { base_url, url, max_pages = 15, type = 'documentation' } = req.body;
 
-// Fix parameter name (plugin sends 'url' instead of 'base_url')
-if (!base_url && url) {
-  base_url = url;
-}
+    // Fix parameter name (plugin sends 'url' instead of 'base_url')
+    if (!base_url && url) {
+      base_url = url;
+    }
 
-// Clean URL (remove extra braces like the simple endpoint does)
-if (base_url) {
-  base_url = base_url.toString().trim();
-  if (base_url.startsWith('{') && base_url.endsWith('}')) {
-    base_url = base_url.slice(1, -1);
-    console.log('Cleaned base_url from:', url || req.body.base_url, 'to:', base_url);
-  }
-}    
+    // Clean URL (remove extra braces like the simple endpoint does)
+    if (base_url) {
+      base_url = base_url.toString().trim();
+      if (base_url.startsWith('{') && base_url.endsWith('}')) {
+        base_url = base_url.slice(1, -1);
+        console.log('Cleaned base_url from:', url || req.body.base_url, 'to:', base_url);
+      }
+    }    
+    
     console.log('=== INTELLIGENT CRAWL REQUEST ===');
     console.log('Body:', req.body);
     
@@ -205,7 +160,9 @@ if (base_url) {
 
 // Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`🚀 Web Scraper Server running on port ${PORT}`);
+  console.log(`🚀 Web Scraper Server v2.0 running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔧 Scrape endpoint: POST http://localhost:${PORT}/webscrape`);
+  console.log(`🔧 Simple scrape: POST http://localhost:${PORT}/webscrape`);
+  console.log(`🧠 Intelligent crawl: POST http://localhost:${PORT}/webscrape-intelligent`);
+  console.log(`✨ Features: Semantic extraction, Advanced metadata, Intelligent crawling`);
 });
