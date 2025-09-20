@@ -32,11 +32,23 @@ function cleanText(text) {
 // Endpoint principal de web scraping
 app.post('/webscrape', async (req, res) => {
   try {
+    // DEBUG: Log completo do request
+    console.log('=== DEBUG REQUEST ===');
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    console.log('Raw body type:', typeof req.body);
+    console.log('===================');
+    
     const { url } = req.body;
+    
+    // DEBUG: Log específico da URL
+    console.log('Extracted URL:', url);
+    console.log('URL type:', typeof url);
     
     if (!url) {
       return res.status(400).json({ 
         error: 'URL é obrigatória',
+        received_body: req.body,
         usage: 'POST /webscrape com { "url": "https://exemplo.com" }'
       });
     }
