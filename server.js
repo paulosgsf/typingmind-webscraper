@@ -41,7 +41,102 @@ app.post('/webscrape', async (req, res) => {
       return res.status(400).json({ 
         error: 'URL é obrigatória',
         usage: 'POST /webscrape com { "url": "https://exemplo.com" }'
+      });
+    }
+
+    // Limpar URL (mantido exatamente como estava)
+    url = url.toString().trim();
+    if (url.startsWith('{') && url.endsWith('}')) {
+      url = url.slice(1, -1);
+      console.log('Cleaned URL from:', req.body.url, 'to:', url);
+    }
+
+    // Validar URL
+    let targetUrl;
+    try {
+      targetUrl = new URL(url);
+    } catch (err) {
+      return res.status(400).json({ error: 'URL inválida' });
+    }
+
+    console.log(`Scraping: ${url}`);
+
+    // Fazer requisição HTTP (método original)
+    const response = await axios.get(url, {
+      headers: browserHeaders,
+      timeout: 10000,
+      maxRedirects: 5
+    });
+
+    // Carregar HTML no Cheerio (método original)
+    const $ = cheerio.load(response.data);
+
+    // Remover elementos desnecessários (método original)
+    $('script, style, nav, header, footer, .ad, .advertisement, #ads').remove();
+
+    // Extrair conteúdo principal (método original)
+    let content = '';
+    
+    const contentSelectors = [
+      'main',
+      'article', 
+      '[role="main"]',
+      '.content',
+      '.main-content',
+      '#content',
+      '.post-content',
+      '.entry-content',
+      'body'
+    ];
+
+    for (const selector of contentSelectors) {
+      const element = $(selector);
+      if (element.length > 0 && element.text().trim().length > 100) {
+        content = element.text();
+        break;
       }
+    }
+
+    if (!content) {
+      content = $('body').text();
+    }
+
+    // Limpar e processar texto (método original)
+    const cleanedContent = cleanText(content);
+    
+    // Extrair metadados úteis (método original)
+    const title = $('title').text().trim() || '';
+    const description = $('meta[name="description"]').attr('content') || '';
+
+    // Resposta estruturada (método original)
+    const result = {
+      url: url,
+      title: title,
+      description: description,
+      content: cleanedContent,
+      length: cleanedContent.length,
+      scraped_at: new Date().toISOString()
+    };
+
+    console.log(`✅ Scraped ${url} - ${result.length} chars`);
+    res.json(result);
+
+  } catch (error) {
+    console.error('❌ Scraping error:', error.message);
+    
+    if (error.code === 'ENOTFOUND') {
+      return res.status(400).json({ error: 'URL não encontrada ou inacessível' });
+    }
+    
+    if (error.code === 'ECONNABORTED') {
+      return res.status(408).json({ error: 'Timeout - site muito lento' });
+    }
+
+    res.status(500).json({ 
+      error: 'Erro interno do servidor',
+      message: error.message 
+    });
+  }
 });
 
 // === NOVOS ENDPOINTS: OTIMIZAÇÃO DE TOKENS ===
@@ -142,101 +237,6 @@ app.post('/webscrape-optimization-comparison', async (req, res) => {
 
     res.status(500).json({ 
       error: 'Erro na comparação de otimização',
-      message: error.message 
-    });
-  });
-    }
-
-    // Limpar URL (mantido exatamente como estava)
-    url = url.toString().trim();
-    if (url.startsWith('{') && url.endsWith('}')) {
-      url = url.slice(1, -1);
-      console.log('Cleaned URL from:', req.body.url, 'to:', url);
-    }
-
-    // Validar URL
-    let targetUrl;
-    try {
-      targetUrl = new URL(url);
-    } catch (err) {
-      return res.status(400).json({ error: 'URL inválida' });
-    }
-
-    console.log(`Scraping: ${url}`);
-
-    // Fazer requisição HTTP (método original)
-    const response = await axios.get(url, {
-      headers: browserHeaders,
-      timeout: 10000,
-      maxRedirects: 5
-    });
-
-    // Carregar HTML no Cheerio (método original)
-    const $ = cheerio.load(response.data);
-
-    // Remover elementos desnecessários (método original)
-    $('script, style, nav, header, footer, .ad, .advertisement, #ads').remove();
-
-    // Extrair conteúdo principal (método original)
-    let content = '';
-    
-    const contentSelectors = [
-      'main',
-      'article', 
-      '[role="main"]',
-      '.content',
-      '.main-content',
-      '#content',
-      '.post-content',
-      '.entry-content',
-      'body'
-    ];
-
-    for (const selector of contentSelectors) {
-      const element = $(selector);
-      if (element.length > 0 && element.text().trim().length > 100) {
-        content = element.text();
-        break;
-      }
-    }
-
-    if (!content) {
-      content = $('body').text();
-    }
-
-    // Limpar e processar texto (método original)
-    const cleanedContent = cleanText(content);
-    
-    // Extrair metadados úteis (método original)
-    const title = $('title').text().trim() || '';
-    const description = $('meta[name="description"]').attr('content') || '';
-
-    // Resposta estruturada (método original)
-    const result = {
-      url: url,
-      title: title,
-      description: description,
-      content: cleanedContent,
-      length: cleanedContent.length,
-      scraped_at: new Date().toISOString()
-    };
-
-    console.log(`✅ Scraped ${url} - ${result.length} chars`);
-    res.json(result);
-
-  } catch (error) {
-    console.error('❌ Scraping error:', error.message);
-    
-    if (error.code === 'ENOTFOUND') {
-      return res.status(400).json({ error: 'URL não encontrada ou inacessível' });
-    }
-    
-    if (error.code === 'ECONNABORTED') {
-      return res.status(408).json({ error: 'Timeout - site muito lento' });
-    }
-
-    res.status(500).json({ 
-      error: 'Erro interno do servidor',
       message: error.message 
     });
   }
